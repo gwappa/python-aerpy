@@ -1,4 +1,5 @@
 import numpy as np
+from collections import namedtuple
 import struct
 import traceback
 
@@ -29,6 +30,22 @@ fmt_int16_waddr = '>H'
 fmt_int16_raddr = '>H'
 fmt_int32_timestamp = ">i"
 
+class AEData(namedtuple('_AEData', ['time','isspecial','polarity','xpos','ypos'])):
+    def __getitem__(self, flag):
+        if isinstance(flag, (str, int)):
+            return super().__getitem__(flag)
+        return AEData(self.time[flag], self.isspecial[flag], self.polarity[flag], self.xpos[flag], self.ypos[flag])
+
+    def size(self):
+        return self.time.size
+
+def histogram(data, xdim=240, ydim=180):
+    histo = np.zeros((xdim,ydim), dtype=int)
+    data  = data[~data.isspecial]
+    for i in range(data.size()):
+        histo[int(data.xpos[i]), int(data.ypos[i])] += 1
+    return histo
+
 def parse_epxy(bseq):
     """parses 32-bit `bseq` to return X pos, Y pos and polarity."""
     rawaddr = struct.unpack(fmt_int32_raddr, bseq)[0]
@@ -48,16 +65,18 @@ def parse_timestamp(bseq):
 def parse_event(bseq):
     e, p, x, y = parse_epxy(bseq[:4])
     t = parse_timestamp(bseq[4:])
-    return e, p, x, y, t
+    return t, e, p, x, y
 
 def read_events_impl(file):
+    data = AEData([],[],[],[],[])
     while True:
         bseq = file.read(8)
         if (len(bseq) < 8):
-            break
-        yield parse_event(bseq)
+            return AEData(*[np.array(buf) for buf in data])
+        for arr, item in zip(data, parse_event(bseq)):
+            arr.append(item)
 
-def read_events(file):
+def read(file):
     """read events from `file` and returns it as an numpy array.
 
     out[:,0] -- whether or not it is 'special' event.
@@ -74,4 +93,4 @@ def read_events(file):
     except:
         traceback.print_exc()
     findstart(file)
-    return np.stack([epxyt for epxyt in read_events_impl(file)], axis=0)
+    return read_events_impl(file)
