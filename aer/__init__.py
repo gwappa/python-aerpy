@@ -90,7 +90,7 @@ class AEFileReader:
         try:
             header = self.rewind()
             if self.verbose == True:
-                print(f"opened: {path}")
+                print(f"opened: {path}", flush=True)
         except EOFError:
             raise RuntimeError(f"not in the AEData format: {path}")
 
